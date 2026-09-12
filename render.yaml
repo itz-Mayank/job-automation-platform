@@ -1,0 +1,49 @@
+databases:
+  - name: jobforge-postgres
+    databaseName: jobforge
+    user: jobforge
+    plan: free
+
+services:
+  - type: web
+    name: jobforge-api
+    runtime: docker
+    dockerfilePath: ./backend/src/JobForge.Api/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ConnectionStrings__Postgres
+        fromDatabase:
+          name: jobforge-postgres
+          property: connectionString
+      - key: Jwt__Secret
+        generateValue: true
+      - key: Jwt__Issuer
+        value: JobForge
+      - key: Jwt__Audience
+        value: JobForge
+      - key: Cors__AllowedOrigins__0
+        sync: false # set to the deployed frontend's URL once known
+      - key: ApplyMigrationsOnStartup
+        value: "true"
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+
+  - type: worker
+    name: jobforge-worker
+    runtime: docker
+    dockerfilePath: ./worker/JobForge.Worker/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: ConnectionStrings__Postgres
+        fromDatabase:
+          name: jobforge-postgres
+          property: connectionString
+      - key: Worker__PollIntervalSeconds
+        value: "2"
+      - key: Worker__StaleExecutionThresholdSeconds
+        value: "120"
+      - key: DOTNET_ENVIRONMENT
+        value: Production

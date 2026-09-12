@@ -19,8 +19,9 @@ public static class DependencyInjection
     /// </summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("Postgres")
-            ?? throw new InvalidOperationException("Missing 'ConnectionStrings:Postgres' configuration.");
+        var connectionString = NormalizeConnectionString(
+            configuration.GetConnectionString("Postgres")
+                ?? throw new InvalidOperationException("Missing 'ConnectionStrings:Postgres' configuration."));
 
         services.AddDbContext<JobForgeDbContext>(options =>
             options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
@@ -47,5 +48,29 @@ public static class DependencyInjection
             .ConfigurePrimaryHttpMessageHandler(SsrfSafeHttpClient.CreateHandler);
 
         return services;
+    }
+
+    /// <summary>
+    /// Managed Postgres on Render/Railway/Heroku-style hosts injects the connection as a
+    /// "postgres://user:pass@host:port/db" URI, which Npgsql's ADO.NET-style parser rejects outright.
+    /// Local dev and Docker Compose already use the "Host=...;Port=...;..." keyword form, so only
+    /// convert when a URI is detected — this keeps the same appsettings/env var working unchanged
+    /// across local, Docker, and a managed-Postgres deployment.
+    /// </summary>
+    public static string NormalizeConnectionString(string raw)
+    {
+        if (!raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+            && !raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            return raw;
+        }
+
+        var uri = new Uri(raw);
+        var userInfo = uri.UserInfo.Split(':', 2);
+        var database = uri.AbsolutePath.TrimStart('/');
+
+        return $"Host={uri.Host};Port={uri.Port};Database={database};" +
+               $"Username={Uri.UnescapeDataString(userInfo[0])};Password={Uri.UnescapeDataString(userInfo[1])};" +
+               "SSL Mode=Require;Trust Server Certificate=true";
     }
 }
