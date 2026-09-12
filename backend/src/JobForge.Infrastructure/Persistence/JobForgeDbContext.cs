@@ -16,4 +16,6 @@ public class JobForgeDbContext : DbContext, IApplicationDbContext
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(JobForgeDbContext).Assembly);
     }
+
+    public void DetachAllTrackedEntities() => ChangeTracker.Clear();
 }

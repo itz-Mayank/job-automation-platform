@@ -197,11 +197,5 @@ public sealed class WorkerExecutionService : IWorkerExecutionService
         return created;
     }
 
-    private void DetachAll()
-    {
-        foreach (var entry in _db.ChangeTracker.Entries().ToList())
-        {
-            entry.State = EntityState.Detached;
-        }
-    }
+    private void DetachAll() => _db.ChangeTracker.Clear();
 }

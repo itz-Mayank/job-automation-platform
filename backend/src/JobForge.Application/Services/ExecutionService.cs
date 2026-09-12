@@ -63,8 +63,10 @@ public sealed class ExecutionService : IExecutionService
         catch (DbUpdateException)
         {
             // The only realistic cause of this specific insert failing is the partial unique index
-            // (one active execution per job) — another concurrent Run Now won the race. Re-read and
-            // return whatever it created instead of surfacing a 500.
+            // (one active execution per job) — another concurrent Run Now won the race. Clear the
+            // tracker so the failed insert can't interfere with the follow-up read, then return
+            // whatever the winner created instead of surfacing a 500.
+            _db.DetachAllTrackedEntities();
             var winner = await _db.Executions.FirstOrDefaultAsync(
                 e => e.JobId == jobId && ActiveStatuses.Contains(e.Status), cancellationToken);
             if (winner is not null)
