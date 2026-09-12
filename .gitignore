@@ -1,0 +1,39 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+appsettings.Development.json.bak
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+frontend/.env.local
+*.tsbuildinfo
+npm-debug.log*
+
+# Env / secrets
+.env
+.env.*.local
+*.pem
+
+# EF Core
+*.mdf
+*.ldf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+logs/
+*.log
+
+# Docker volumes (local dev)
+pgdata/
