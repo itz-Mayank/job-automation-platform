@@ -68,8 +68,11 @@ public static class DependencyInjection
         var uri = new Uri(raw);
         var userInfo = uri.UserInfo.Split(':', 2);
         var database = uri.AbsolutePath.TrimStart('/');
+        // Some hosts (e.g. Render's *internal* connection string) omit an explicit port, which
+        // Uri.Port reports as -1 rather than defaulting it.
+        var port = uri.Port == -1 ? 5432 : uri.Port;
 
-        return $"Host={uri.Host};Port={uri.Port};Database={database};" +
+        return $"Host={uri.Host};Port={port};Database={database};" +
                $"Username={Uri.UnescapeDataString(userInfo[0])};Password={Uri.UnescapeDataString(userInfo[1])};" +
                "SSL Mode=Require;Trust Server Certificate=true";
     }

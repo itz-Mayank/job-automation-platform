@@ -28,4 +28,14 @@ public class ConnectionStringNormalizationTests
         result.Should().Contain("Password=my@pass");
         result.Should().Contain("SSL Mode=Require");
     }
+
+    [Fact]
+    public void PostgresUri_WithoutExplicitPort_DefaultsTo5432()
+    {
+        const string uri = "postgresql://jobforge:secret@dpg-example-a/jobforge";
+
+        var result = DependencyInjection.NormalizeConnectionString(uri);
+
+        result.Should().Contain("Port=5432");
+    }
 }
