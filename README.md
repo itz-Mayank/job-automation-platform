@@ -197,9 +197,11 @@ ENGINEERING.md "Concurrency".
 
 ## Deployment
 
-See the **Deployment** section of ENGINEERING.md for the recommended low-cost architecture and exact
-manual steps, since this environment could not provision or verify a live public deployment on your
-behalf (no hosting account is connected here).
+**Live**: https://job-automation-platform-nine.vercel.app (frontend) · https://jobforge-api.onrender.com
+(API, Swagger at `/swagger`) — Postgres + API + worker on Render, frontend on Vercel, verified
+end-to-end with a real browser session. See ENGINEERING.md §11 for the exact setup and two
+deployment-specific caveats worth knowing before you rely on it: both Render services (including the
+worker) sleep after ~15 minutes idle, and the free Postgres instance expires after 30 days.
 
 ## Demo Credentials
 

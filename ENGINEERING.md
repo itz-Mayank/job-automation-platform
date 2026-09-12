@@ -194,50 +194,58 @@ active execution rather than ever creating a second one.
 
 ## 11. Deployment
 
-No cloud account or hosting credentials are connected to this environment, so no live public URL was
-provisioned or can be claimed as verified — what follows is a concrete, low-cost path a human with
-access to a provider account can execute in roughly 15–20 minutes, plus the exact steps used to verify
-the app locally (Docker Compose, real browser, multiple workers) as the closest available substitute.
+**Live**: this is deployed and was verified working end-to-end (register → login → create job → Run
+Now → real worker execution → dashboard) via a real headless-browser session, zero console errors.
 
-**Recommended architecture** (free/low-cost tiers, minimal moving parts):
-
-| Component | Suggested host | Why |
+| Component | URL | Host |
 |---|---|---|
-| PostgreSQL | Render Postgres (free tier) or Supabase | Managed, gives you a connection string immediately |
-| API | Render Web Service (Docker) | Builds `backend/src/JobForge.Api/Dockerfile` directly from the repo |
-| Worker | Render Background Worker (Docker) | Same image family, no public port needed; scale by adding a second worker service |
-| Frontend | Vercel | Next.js's native host; zero-config for the App Router |
+| Frontend | https://job-automation-platform-nine.vercel.app | Vercel |
+| API | https://jobforge-api.onrender.com (Swagger at `/swagger`) | Render (free web service) |
+| Worker | https://jobforge-worker.onrender.com | Render (free web service — see note below) |
+| Database | (private) | Render Postgres (free) |
+| Source | https://github.com/itz-Mayank/job-automation-platform | GitHub (private) |
 
-**Steps:**
+**How it was built**, so the same path can be reproduced or extended:
 
-1. **Database**: create a Postgres instance on Render/Supabase/etc. Copy its connection string.
-2. **API**: create a new Web Service pointing at this repo, Docker build context `.`, Dockerfile
-   `backend/src/JobForge.Api/Dockerfile`. Set env vars: `ConnectionStrings__Postgres` (from step 1,
-   converted to `Host=...;Port=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true`
-   — managed Postgres providers require SSL), `Jwt__Secret` (generate: `openssl rand -base64 48`),
-   `Jwt__Issuer`, `Jwt__Audience`, `Cors__AllowedOrigins__0` (the frontend's eventual URL — can be
-   updated after step 4), `ApplyMigrationsOnStartup=true` for the first deploy only (see §8 for why
-   this is opt-in rather than default; consider setting it back to `false` after the schema is stable
-   and running `dotnet ef database update` manually for subsequent schema changes instead).
-3. **Worker**: create a second service from the same repo, Dockerfile
-   `worker/JobForge.Worker/Dockerfile`, same `ConnectionStrings__Postgres`. No public port required.
-   Add a second worker service (or the platform's replica count) to demonstrate multiple workers safely
-   sharing the queue, exactly as `docker compose up --scale worker=3` does locally.
-4. **Frontend**: import the repo into Vercel, set root directory to `frontend`, and set
-   `NEXT_PUBLIC_API_URL` to the API's public URL from step 2. Redeploy.
-5. **Close the loop**: update the API's `Cors__AllowedOrigins__0` to the frontend's real Vercel URL and
-   redeploy the API.
-6. **Verify** against the live URLs: register, log in, create a job, Run Now, watch it succeed/fail in
-   the execution detail page, retry a failure, and confirm the dashboard counts update.
+1. **Database**: Render Postgres (free plan). Render injects its connection as a `postgres://user:pass@host/db`
+   URI rather than the `Host=...;Port=...;` keyword form Npgsql expects — `AddInfrastructure()` and the
+   API's health-check registration both now run every connection string through
+   `DependencyInjection.NormalizeConnectionString()`, which detects and converts the URI form (defaulting
+   a missing port to 5432, and using `SSL Mode=Prefer` rather than `Require` since the *internal*
+   Render-network connection doesn't offer SSL the way the external one does). Covered by
+   `ConnectionStringNormalizationTests`.
+2. **API**: a Render Web Service building `backend/src/JobForge.Api/Dockerfile` (context `.`) straight
+   from the GitHub repo, `autoDeploy: yes`. `ApplyMigrationsOnStartup=true` so the first deploy creates
+   the schema (see §8 for why this is an explicit opt-in, not a default).
+3. **Worker**: Render's *free* plan only runs "web services" — a dedicated background-worker plan is
+   paid. Rather than ask for that spend, the worker was converted from a plain generic-host
+   `BackgroundService` to a minimal ASP.NET Core host that adds one `GET /health` liveness endpoint
+   alongside the same `ExecutionWorker` polling loop (see `worker/Program.cs`), which is enough to
+   satisfy Render's free-web-service requirement without changing anything about how it claims or
+   executes jobs.
+4. **Frontend**: deployed via the Vercel CLI directly from `frontend/`, with `NEXT_PUBLIC_API_URL` set
+   to the live API URL as a build-time environment variable (Next.js inlines `NEXT_PUBLIC_*` vars at
+   build time, so this must be set *before* building, not adjusted after).
+5. **Closing the loop**: the API's `Cors__AllowedOrigins__0` was set to the deployed frontend's real
+   Vercel URL (not knowable until step 4 completed), then the API was redeployed once more.
 
-**What was actually verified in this environment** (documented here since it's the honest substitute for
-step 6 above): the full stack was built and run via `docker compose up --build`, all four containers
-(`postgres`, `api`, `worker`, `frontend`) reached a healthy state, and a real headless-browser session
-(Playwright) drove the complete user journey — register → login → create job → Run Now → execution
-detail (worker id, attempt, HTTP status, response preview all populated correctly) → dashboard counts
-updating — with zero browser console errors. Multi-worker safety was verified against the containerized
-stack too: with `--scale worker=3` running, a triggered execution was claimed and processed by exactly
-one of the three worker containers (confirmed via each worker's logs and the execution's `worker_id`).
+**Known deployment-specific limitations** (distinct from the application-level ones in §12):
+
+- **Free-tier cold starts.** Both Render services sleep after ~15 minutes with no inbound HTTP traffic
+  and take a few seconds to wake on the next request — the very first request after idling (e.g. the
+  first login of the day) will be slower than usual. This is a hosting-tier characteristic, not an
+  application bug.
+- **The worker can go to sleep too — and job processing pauses while it's asleep.** Because the worker
+  runs as a free web service specifically to avoid a paid plan (point 3 above), Render's inactivity
+  spin-down applies to it as well: if nothing hits `jobforge-worker.onrender.com` for ~15 minutes, the
+  whole process (including the polling loop) stops until the next inbound request wakes it — so a job's
+  scheduled or manually-triggered execution could sit `PENDING` longer than expected if the worker had
+  gone idle. The straightforward fix, not yet set up, is a free external uptime pinger (e.g.
+  UptimeRobot, cron-job.org, or a scheduled GitHub Action) hitting both `/health` endpoints every 5–10
+  minutes to keep both services warm. A paid Render background-worker plan removes this entirely, since
+  that plan tier doesn't spin down on inactivity the same way.
+- **Render Postgres free tier expires 30 days after creation** and is not backed up — fine for a
+  take-home evaluation window, not for anything meant to persist.
 
 ## 12. Known Limitations
 
