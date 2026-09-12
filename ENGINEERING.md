@@ -192,7 +192,54 @@ active execution rather than ever creating a second one.
   a data pipeline; nobody needs the full 50MB response, they need the first few KB and the status code.
 - **Manual retry creates a new row, preserving history** — see §5.
 
-## 11. Known Limitations
+## 11. Deployment
+
+No cloud account or hosting credentials are connected to this environment, so no live public URL was
+provisioned or can be claimed as verified — what follows is a concrete, low-cost path a human with
+access to a provider account can execute in roughly 15–20 minutes, plus the exact steps used to verify
+the app locally (Docker Compose, real browser, multiple workers) as the closest available substitute.
+
+**Recommended architecture** (free/low-cost tiers, minimal moving parts):
+
+| Component | Suggested host | Why |
+|---|---|---|
+| PostgreSQL | Render Postgres (free tier) or Supabase | Managed, gives you a connection string immediately |
+| API | Render Web Service (Docker) | Builds `backend/src/JobForge.Api/Dockerfile` directly from the repo |
+| Worker | Render Background Worker (Docker) | Same image family, no public port needed; scale by adding a second worker service |
+| Frontend | Vercel | Next.js's native host; zero-config for the App Router |
+
+**Steps:**
+
+1. **Database**: create a Postgres instance on Render/Supabase/etc. Copy its connection string.
+2. **API**: create a new Web Service pointing at this repo, Docker build context `.`, Dockerfile
+   `backend/src/JobForge.Api/Dockerfile`. Set env vars: `ConnectionStrings__Postgres` (from step 1,
+   converted to `Host=...;Port=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true`
+   — managed Postgres providers require SSL), `Jwt__Secret` (generate: `openssl rand -base64 48`),
+   `Jwt__Issuer`, `Jwt__Audience`, `Cors__AllowedOrigins__0` (the frontend's eventual URL — can be
+   updated after step 4), `ApplyMigrationsOnStartup=true` for the first deploy only (see §8 for why
+   this is opt-in rather than default; consider setting it back to `false` after the schema is stable
+   and running `dotnet ef database update` manually for subsequent schema changes instead).
+3. **Worker**: create a second service from the same repo, Dockerfile
+   `worker/JobForge.Worker/Dockerfile`, same `ConnectionStrings__Postgres`. No public port required.
+   Add a second worker service (or the platform's replica count) to demonstrate multiple workers safely
+   sharing the queue, exactly as `docker compose up --scale worker=3` does locally.
+4. **Frontend**: import the repo into Vercel, set root directory to `frontend`, and set
+   `NEXT_PUBLIC_API_URL` to the API's public URL from step 2. Redeploy.
+5. **Close the loop**: update the API's `Cors__AllowedOrigins__0` to the frontend's real Vercel URL and
+   redeploy the API.
+6. **Verify** against the live URLs: register, log in, create a job, Run Now, watch it succeed/fail in
+   the execution detail page, retry a failure, and confirm the dashboard counts update.
+
+**What was actually verified in this environment** (documented here since it's the honest substitute for
+step 6 above): the full stack was built and run via `docker compose up --build`, all four containers
+(`postgres`, `api`, `worker`, `frontend`) reached a healthy state, and a real headless-browser session
+(Playwright) drove the complete user journey — register → login → create job → Run Now → execution
+detail (worker id, attempt, HTTP status, response preview all populated correctly) → dashboard counts
+updating — with zero browser console errors. Multi-worker safety was verified against the containerized
+stack too: with `--scale worker=3` running, a triggered execution was claimed and processed by exactly
+one of the three worker containers (confirmed via each worker's logs and the execution's `worker_id`).
+
+## 12. Known Limitations
 
 - **No exactly-once side effects** — see §6. Acknowledged, not hidden.
 - **No distributed queue.** At a scale where a single Postgres instance's connection count or write
@@ -212,7 +259,7 @@ active execution rather than ever creating a second one.
   full per-attempt response history mid-retry-cycle.
 - **SSRF guard is best-effort**, not a complete solution — see §9.
 
-## 12. What I Would Improve With More Time
+## 13. What I Would Improve With More Time
 
 - A real queue/broker if throughput ever demanded it, with the claim abstraction (`IExecutionClaimService`)
   already isolated enough to swap the implementation without touching the worker loop or the API.
