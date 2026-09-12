@@ -26,7 +26,7 @@ public class ConnectionStringNormalizationTests
         result.Should().Contain("Database=jobforge_db");
         result.Should().Contain("Username=myuser");
         result.Should().Contain("Password=my@pass");
-        result.Should().Contain("SSL Mode=Require");
+        result.Should().Contain("SSL Mode=Prefer");
     }
 
     [Fact]

@@ -52,8 +52,15 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Must go through the same URI-to-Npgsql-keyword-format normalization AddInfrastructure() applies
+// to the DbContext's connection string, or this fails against any host (Render, Railway, Heroku)
+// that injects a "postgres://" URI instead of "Host=...;Port=...;" — Npgsql's health check package
+// hands the raw string straight to NpgsqlConnection with no such conversion of its own.
+var healthCheckConnectionString = DependencyInjection.NormalizeConnectionString(
+    builder.Configuration.GetConnectionString("Postgres")!);
+
 builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("Postgres")!, name: "postgres");
+    .AddNpgSql(healthCheckConnectionString, name: "postgres");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

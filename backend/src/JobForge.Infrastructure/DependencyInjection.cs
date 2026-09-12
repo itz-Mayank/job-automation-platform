@@ -72,8 +72,12 @@ public static class DependencyInjection
         // Uri.Port reports as -1 rather than defaulting it.
         var port = uri.Port == -1 ? 5432 : uri.Port;
 
+        // "Prefer" rather than "Require": a managed host's *internal*/private-network connection
+        // (e.g. Render's same-region service-to-database link) often doesn't offer SSL at all, only
+        // its externally-reachable connection does — Prefer negotiates SSL when available and falls
+        // back to plaintext instead of hard-failing when it isn't, working correctly either way.
         return $"Host={uri.Host};Port={port};Database={database};" +
                $"Username={Uri.UnescapeDataString(userInfo[0])};Password={Uri.UnescapeDataString(userInfo[1])};" +
-               "SSL Mode=Require;Trust Server Certificate=true";
+               "SSL Mode=Prefer;Trust Server Certificate=true";
     }
 }
