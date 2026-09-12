@@ -1,4 +1,6 @@
-<Project Sdk="Microsoft.NET.Sdk.Worker">
+<!-- Web SDK (not Worker SDK) despite this being a background service: it needs WebApplication/Kestrel
+     for the minimal HTTP endpoint in Program.cs — see the comment there for why that exists. -->
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>

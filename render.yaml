@@ -30,12 +30,16 @@ services:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
 
-  - type: worker
+  - type: web
     name: jobforge-worker
     runtime: docker
     dockerfilePath: ./worker/JobForge.Worker/Dockerfile
     dockerContext: .
     plan: free
+    # Render's free plan only runs "web services" — the worker exposes a minimal /health
+    # liveness endpoint purely to qualify (see worker/JobForge.Worker/Program.cs). Nothing
+    # about its actual job — polling and processing executions — depends on this endpoint.
+    healthCheckPath: /health
     envVars:
       - key: ConnectionStrings__Postgres
         fromDatabase:

@@ -19,4 +19,6 @@ WORKDIR /app
 RUN useradd --uid 5678 --user-group --create-home appuser
 COPY --from=build /app .
 USER appuser
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
 ENTRYPOINT ["dotnet", "JobForge.Worker.dll"]
