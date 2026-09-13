@@ -18,6 +18,26 @@ The system is built to survive the failure modes a real job runner has to surviv
 clicks, two workers racing for the same job, a worker crashing mid-execution, and the target API timing
 out or returning errors — see [ENGINEERING.md](ENGINEERING.md) for how each is handled.
 
+## Screenshots
+
+Taken from the live deployment (https://job-automation-platform-nine.vercel.app).
+
+**Dashboard** — per-user job/execution counts and a recent-activity feed, refreshed automatically:
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+**Job detail** — the job's config alongside its execution history; this is a manual, non-retrying HTTP
+GET job that succeeded on its first (and only) attempt:
+
+![Job detail](docs/screenshots/job-detail.png)
+
+**Execution detail (failure)** — the page built to answer *what failed, why, which attempt, which
+worker, and will/when it retries* without digging through logs. This execution used all 3 of its
+configured attempts against a target that always returns HTTP 500, so it's terminal and offers a manual
+**Retry execution** button; the `WORKER` field names the actual Render container that ran it:
+
+![Execution detail — failed](docs/screenshots/execution-detail-failed.png)
+
 ## Features
 
 - Email/password auth (JWT), scoped so users only ever see their own jobs and executions.
